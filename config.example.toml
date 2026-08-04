@@ -1,0 +1,56 @@
+# depu-img-mcp configuration
+# Copy to config.toml and edit. Env vars override these values.
+
+[server]
+transport = "streamable-http"   # streamable-http | stdio | sse
+host = "0.0.0.0"
+port = 8080
+mcp_path = "/mcp"
+
+[web]
+enabled = true
+admin_token = ""
+
+[prompt]
+# Base system prompt injected on every call. Set to "" to disable.
+base_vision_prompt = """You are a vision assistant. Describe/analyze the image accurately and concisely to help a text-only model that cannot see. If the user prompt is empty, give a thorough general description (objects, text/OCR, layout, colors). Respond in the same language as the user's prompt."""
+
+[request]
+timeout_ms = 30000
+max_retries = 3
+backoff_base_ms = 500
+
+[security]
+max_image_bytes = 20_000_000    # 20MB raw
+allow_local_file = true
+ssrf_block_private = true
+
+# --- Vision backends. Define as many [[providers]] as you need. ---
+
+# Default: your LiteLLM gateway fronting vLLM.
+[[providers]]
+name = "default"
+type = "openai-compat"           # openai-compat | anthropic
+base_url = "https://gateway.ai.depu.school/v1"
+api_key = "${DEPU_GATEWAY_API_KEY}"
+model = "Kimi-K2.7-Code"
+auth_header = "bearer"           # bearer | x-api-key | custom
+api_path = "/chat/completions"
+max_tokens = 2048
+
+# Example: OpenAI direct
+# [[providers]]
+# name = "openai"
+# type = "openai-compat"
+# base_url = "https://api.openai.com/v1"
+# api_key = "${OPENAI_API_KEY}"
+# model = "gpt-4o"
+# auth_header = "bearer"
+
+# Example: Anthropic native API
+# [[providers]]
+# name = "anthropic"
+# type = "anthropic"
+# base_url = "https://api.anthropic.com"
+# api_key = "${ANTHROPIC_API_KEY}"
+# model = "claude-sonnet-5"

@@ -1,0 +1,94 @@
+# depu-img-mcp
+
+图像理解 MCP 服务器 —— 让不支持图像的文本模型通过 MCP 把图片 + prompt 转发给视觉模型，返回描述文本。自身不做推理，是协议适配与转发层。
+
+## 特性
+
+- **MCP v2**（`MCPServer` + Streamable HTTP，2026-07-28 规范），同时支持 stdio / SSE
+- **Docker 部署**（多阶段构建 + docker-compose）
+- **多后端 provider**：任意 OpenAI 兼容端点（LiteLLM 网关 / vLLM / OpenAI / DashScope / 智谱 / OpenRouter / Ollama …）
+- **双层 prompt 注入**：全局 `base_vision_prompt` + per-call `prompt` + `task_type` 路由（auto/general/ocr/ui/debug/describe）
+- **安全**：magic byte 校验、大小限制、SSRF 防护、路径白名单
+- **轻量 Web 后台**（`/admin`）：查看配置 + 在线测试图片
+- 配置双源：环境变量覆盖 `config.toml`，密钥支持 `${ENV}` 插值
+
+## 快速开始
+
+```bash
+# 1. 配置
+cp config.example.toml config.toml
+cp .env.example .env
+# 编辑 .env 填入 API key，编辑 config.toml 指向你的视觉后端
+
+# 2. Docker 启动
+docker compose up -d
+
+# 3. 访问后台
+open http://localhost:8080/admin
+# MCP 端点：http://localhost:8080/mcp
+```
+
+## 本地运行（开发）
+
+```bash
+uv sync
+uv run python -m depu_img_mcp          # 默认 streamable-http
+MCP_TRANSPORT=stdio uv run python -m depu_img_mcp   # stdio 模式给 Claude Desktop 等
+```
+
+## MCP 工具
+
+### `image_understand`
+```python
+image_understand(
+    image: str,            # 本地路径 / http(s) URL / data:image/...;base64,... / 原始 base64
+    prompt: str = "",      # 用户问题；空则按 task_type 给通用描述
+    task_type: str = "auto",  # auto|general|ocr|ui|debug|describe
+    provider: str | None = None,  # 指定后端；None 用默认
+    model: str | None = None,
+    max_tokens: int | None = None,
+) -> str
+```
+
+### `list_vision_providers`
+返回 JSON：各后端名称、模型、是否可用。
+
+## 配置示例
+
+```toml
+[[providers]]
+name = "default"
+type = "openai-compat"
+base_url = "https://gateway.ai.depu.school/v1"
+api_key = "${DEPU_GATEWAY_API_KEY}"
+model = "Kimi-K2.7-Code"
+auth_header = "bearer"
+```
+
+## 客户端配置（Claude Desktop 示例）
+
+stdio 模式：
+```json
+{
+  "mcpServers": {
+    "depu-img": {
+      "command": "python",
+      "args": ["-m", "depu_img_mcp"],
+      "env": { "MCP_TRANSPORT": "stdio", "DEPU_GATEWAY_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+HTTP 模式（支持远程 MCP 的客户端）：
+```json
+{
+  "mcpServers": {
+    "depu-img": { "url": "http://localhost:8080/mcp" }
+  }
+}
+```
+
+## License
+
+MIT

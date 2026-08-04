@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>depu-img-mcp admin</title>
+<style>
+  :root { --fg:#1f2328; --muted:#656d76; --bg:#fff; --card:#f6f8fa; --bd:#d0d7de;
+          --accent:#0969da; --ok:#1a7f37; --err:#cf222e; --dark-bg:#0d1117; --dark-fg:#e6edf3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6edf3; --muted:#8b949e; --bg:#0d1117; --card:#161b22; --bd:#30363d;
+            --accent:#58a6ff; --ok:#3fb950; --err:#f85149; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); line-height:1.5; }
+  header { padding:16px 24px; border-bottom:1px solid var(--bd); }
+  header h1 { margin:0; font-size:18px; }
+  header span { color:var(--muted); font-size:13px; }
+  main { max-width:920px; margin:0 auto; padding:24px 16px 64px; }
+  h2 { font-size:15px; margin:28px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--bd); }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:180px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input, select, textarea, button {
+    font:inherit; padding:7px 10px; border:1px solid var(--bd); border-radius:6px;
+    background:var(--bg); color:var(--fg); width:100%; }
+  textarea { min-height:90px; resize:vertical; font-family:ui-monospace,SFMono-Regular,monospace; font-size:13px; }
+  button { cursor:pointer; background:var(--accent); color:#fff; border:none; width:auto; padding:8px 18px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .prov { border-left:3px solid var(--accent); padding-left:12px; margin-bottom:10px; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px;
+          background:var(--card); border:1px solid var(--bd); color:var(--muted); }
+  .pill.ok { color:var(--ok); border-color:var(--ok); }
+  #out { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,monospace;
+         font-size:13px; min-height:60px; }
+  .err { color:var(--err); }
+  .drop { border:2px dashed var(--bd); border-radius:8px; padding:20px; text-align:center;
+          color:var(--muted); cursor:pointer; }
+  .drop.over { border-color:var(--accent); color:var(--accent); }
+  #preview { max-width:240px; max-height:180px; margin-top:8px; border-radius:6px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:13px; }
+  pre { background:var(--card); padding:12px; border-radius:6px; overflow:auto; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>depu-img-mcp <span class="pill">admin</span></h1>
+  <span>图像理解 MCP 服务器 · 配置与测试</span>
+</header>
+<main>
+
+  <h2>后端 Provider</h2>
+  <div id="providers" class="card">加载中…</div>
+
+  <h2>底层 Prompt</h2>
+  <div class="card">
+    <pre id="basePrompt">{{ config.prompt.base_vision_prompt }}</pre>
+  </div>
+
+  <h2>测试场 (Playground)</h2>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Provider</label>
+        <select id="provSelect"></select>
+      </div>
+      <div>
+        <label>Task type</label>
+        <select id="taskType">
+          <option value="auto">auto</option>
+          <option value="general">general</option>
+          <option value="ocr">ocr</option>
+          <option value="ui">ui</option>
+          <option value="debug">debug</option>
+          <option value="describe">describe</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <label>图片：拖拽到下方，或粘贴 URL / data-URI / 本地路径</label>
+      <div class="drop" id="drop">拖拽图片到这里，或点击选择文件</div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <img id="preview" hidden>
+    </div>
+    <div style="margin-top:12px">
+      <label>Prompt（可选）</label>
+      <textarea id="prompt" placeholder="你想了解图片的什么？留空则按 task_type 给出通用描述。"></textarea>
+    </div>
+    <div style="margin-top:12px">
+      <button id="runBtn">运行 image_understand</button>
+    </div>
+  </div>
+
+  <h2>结果</h2>
+  <div class="card"><div id="out">（等待运行）</div></div>
+
+  <details style="margin-top:24px">
+    <summary>原始配置 (JSON)</summary>
+    <pre id="rawConfig">加载中…</pre>
+  </details>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let imageSource = "";
+
+async function loadConfig(){
+  const r = await fetch("api/config");
+  const c = await r.json();
+  // providers
+  const provs = c.providers || [];
+  $("providers").innerHTML = provs.length ? provs.map(p => `
+    <div class="prov">
+      <b>${p.name}</b> ${p.available ? '<span class="pill ok">可用</span>' : '<span class="pill">缺 key</span>'}<br>
+      <span style="color:var(--muted);font-size:13px">${p.type} · ${p.model}<br>${p.base_url}</span>
+    </div>`).join("") : '<span class="err">未配置任何 provider，请编辑 config.toml</span>';
+  const sel = $("provSelect");
+  sel.innerHTML = provs.map(p => `<option value="${p.name}">${p.name} (${p.model})</option>`).join("");
+  if (c.default_provider) sel.value = c.default_provider;
+  $("basePrompt").textContent = c.prompt.base_vision_prompt || "(空)";
+  $("rawConfig").textContent = JSON.stringify(c, null, 2);
+}
+loadConfig();
+
+// file picker
+$("drop").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", e => handleFile(e.target.files[0]));
+$("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", e => {
+  e.preventDefault(); $("drop").classList.remove("over");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+function handleFile(f){
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { imageSource = r.result; $("preview").src = r.result; $("preview").hidden = false; };
+  r.readAsDataURL(f);
+}
+
+$("runBtn").addEventListener("click", async () => {
+  const src = imageSource || $("drop").textContent.trim();
+  if (!imageSource) {
+    // allow URL/path pasted into the drop zone text
+    const t = prompt("粘贴图片 URL / data-URI / 本地路径：");
+    if (!t) return;
+    imageSource = t;
+  }
+  $("runBtn").disabled = true; $("out").textContent = "运行中…";
+  try {
+    const r = await fetch("api/test", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        image: imageSource,
+        prompt: $("prompt").value,
+        task_type: $("taskType").value,
+        provider: $("provSelect").value,
+      })
+    });
+    const d = await r.json();
+    $("out").innerHTML = d.error
+      ? `<span class="err">错误：${d.error}</span>`
+      : d.result.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  } catch(e) { $("out").innerHTML = `<span class="err">请求失败：${e}</span>`; }
+  finally { $("runBtn").disabled = false; }
+});
+</script>
+</body>
+</html>
