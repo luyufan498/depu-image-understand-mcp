@@ -17,7 +17,7 @@ from mcp.server import MCPServer
 
 from .config import AppConfig, load_config
 from .image import ImageError, load_image
-from .prompts import VALID_TASK_TYPES, build_prompts
+from .prompts import build_prompts
 from .providers import ProviderRegistry
 
 log = logging.getLogger("depu.server")
@@ -51,7 +51,6 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
     async def image_understand(
         image: str,
         prompt: str = "",
-        task_type: str = "auto",
     ) -> str:
         """Describe or analyze an image using a vision model.
 
@@ -64,17 +63,12 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
                 URI (inline base64). Local file paths are NOT supported because
                 the server runs in a container and cannot see the client
                 filesystem — encode the file as a base64 data URI first.
-            prompt: What you want to know about the image. Empty = general
-                description guided by task_type.
-            task_type: auto | general | ocr | ui | debug | describe. Hints the
-                kind of analysis when prompt is empty or terse.
+            prompt: What you want to know about the image. Empty = a general
+                description of the image (objects, text/OCR, layout, colors).
 
         Returns:
             The vision model's text description of the image.
         """
-        if task_type not in VALID_TASK_TYPES:
-            return f"Error: task_type must be one of {sorted(VALID_TASK_TYPES)}, got '{task_type}'"
-
         try:
             img = await load_image(image, cfg.security)
         except ImageError as e:
@@ -85,7 +79,7 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
         except KeyError as e:
             return f"Error: {e}"
 
-        system_prompt, user_prompt = build_prompts(prompt, task_type, cfg.prompt)
+        system_prompt, user_prompt = build_prompts(prompt, cfg.prompt)
 
         try:
             result = await prov.understand(

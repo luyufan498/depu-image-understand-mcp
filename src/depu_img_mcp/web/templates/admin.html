@@ -108,17 +108,6 @@
         <label>Provider</label>
         <select id="provSelect"></select>
       </div>
-      <div>
-        <label>Task type</label>
-        <select id="taskType">
-          <option value="auto">auto</option>
-          <option value="general">general</option>
-          <option value="ocr">ocr</option>
-          <option value="ui">ui</option>
-          <option value="debug">debug</option>
-          <option value="describe">describe</option>
-        </select>
-      </div>
     </div>
     <div style="margin-top:12px">
       <label>图片：拖拽到下方，或粘贴 URL / data-URI / 本地路径</label>
@@ -128,7 +117,7 @@
     </div>
     <div style="margin-top:12px">
       <label>Prompt（可选）</label>
-      <textarea id="prompt" placeholder="你想了解图片的什么？留空则按 task_type 给出通用描述。"></textarea>
+      <textarea id="prompt" placeholder="你想了解图片的什么？留空则给出通用描述。"></textarea>
     </div>
     <div style="margin-top:12px">
       <button id="runBtn">运行 image_understand</button>
@@ -342,7 +331,7 @@ $("runBtn").addEventListener("click", async () => {
       method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         image: imageSource, prompt: $("prompt").value,
-        task_type: $("taskType").value, provider: $("provSelect").value,
+        provider: $("provSelect").value,
       })
     });
     const d = await r.json();

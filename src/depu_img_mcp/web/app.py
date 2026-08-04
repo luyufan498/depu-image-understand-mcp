@@ -168,7 +168,6 @@ def build_admin_app(cfg: AppConfig, registry: ProviderRegistry) -> FastAPI:
         body = await request.json()
         image = body.get("image", "")
         prompt = body.get("prompt", "")
-        task_type = body.get("task_type", "auto")
         provider = body.get("provider")
         if not image:
             return JSONResponse({"error": "image required"}, status_code=400)
@@ -179,7 +178,7 @@ def build_admin_app(cfg: AppConfig, registry: ProviderRegistry) -> FastAPI:
         try:
             img = await load_image(image, cfg.security)
             prov = registry.get(provider)
-            system_prompt, user_prompt = build_prompts(prompt, task_type, cfg.prompt)
+            system_prompt, user_prompt = build_prompts(prompt, cfg.prompt)
             result = await prov.understand(
                 image_b64=img.b64,
                 mime_type=img.mime_type,
