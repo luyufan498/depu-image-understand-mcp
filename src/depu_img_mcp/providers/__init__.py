@@ -35,6 +35,12 @@ def build_provider(pc: ProviderConfig) -> BaseProvider:
 class ProviderRegistry:
     def __init__(self, cfg: AppConfig):
         self._providers: dict[str, BaseProvider] = {}
+        self.default_name = cfg.default_provider
+        self.reload(cfg)
+
+    def reload(self, cfg: AppConfig) -> None:
+        """Rebuild providers from config in place. Hot-reload entry point."""
+        self._providers = {}
         for pc in cfg.providers:
             try:
                 self._providers[pc.name] = build_provider(pc)

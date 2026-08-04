@@ -24,8 +24,12 @@ from .providers import ProviderRegistry
 log = logging.getLogger("depu.server")
 
 
-def create_mcp_server(cfg: AppConfig) -> MCPServer:
-    """Build an MCPServer with tools registered, bound to the given config."""
+def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
+    """Build an MCPServer with tools registered, bound to the given config.
+
+    Returns (mcp, registry) so the caller can hot-reload the registry from the
+    admin UI without rebuilding the MCP server.
+    """
     registry = ProviderRegistry(cfg)
     if len(registry) == 0:
         log.warning(
@@ -115,7 +119,7 @@ def create_mcp_server(cfg: AppConfig) -> MCPServer:
             indent=2,
         )
 
-    return mcp
+    return mcp, registry
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +132,7 @@ def run(cfg: AppConfig | None = None) -> None:
         level=os.environ.get("LOG_LEVEL", "INFO"),
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    mcp = create_mcp_server(cfg)
+    mcp, registry = create_mcp_server(cfg)
 
     transport = cfg.server.transport
     log.info("starting depu-img-mcp (transport=%s)", transport)
@@ -147,7 +151,7 @@ def run(cfg: AppConfig | None = None) -> None:
                 max_request_body_size=64 * 1024 * 1024,
                 host=cfg.server.host,
             )
-            admin = build_admin_app(cfg)
+            admin = build_admin_app(cfg, registry)
             mount_admin(mcp_app, admin, cfg)
             import uvicorn
             uvicorn.run(mcp_app, host=cfg.server.host, port=cfg.server.port)

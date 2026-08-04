@@ -14,8 +14,8 @@ services:
       - WEB_ENABLED=true
       - ADMIN_TOKEN=${ADMIN_TOKEN}
     volumes:
-      # Override config without rebuilding the image.
-      - ./config.toml:/app/config.toml:ro
+      # Config is read/written by the admin UI — must be writable.
+      - ./config.toml:/app/config.toml
       # Optional persistence (logs, cache).
       - ./data:/app/data
     restart: unless-stopped

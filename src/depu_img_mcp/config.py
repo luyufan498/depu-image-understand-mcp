@@ -116,6 +116,11 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         for section, data in raw.items():
             if section == "providers":
                 continue
+            if not isinstance(data, dict):
+                # top-level scalar keys (e.g. default_provider) — interpolate if string
+                if isinstance(data, str):
+                    raw[section] = _interpolate(data)
+                continue
             for k, v in data.items():
                 if isinstance(v, str):
                     data[k] = _interpolate(v)
@@ -139,3 +144,79 @@ def _default_config_path() -> Path:
         if c and c.is_file():
             return c
     return Path.cwd() / "config.toml"
+
+
+def save_config(cfg: AppConfig, path: str | Path | None = None) -> Path:
+    """Write config back to TOML. Returns the path written.
+
+    Preserves comments in the existing file where possible (via tomlkit).
+    `web.admin_token` is deliberately NOT written back — it stays env-managed.
+    API keys are written in plaintext per the user's choice.
+    """
+    import tomlkit
+
+    path = Path(path) if path else _default_config_path()
+    doc = tomlkit.document()
+    if path.exists():
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                doc = tomlkit.parse(f.read())
+        except Exception:  # noqa: BLE001 - fall back to fresh doc on parse error
+            doc = tomlkit.document()
+
+    # [server]
+    srv = tomlkit.table()
+    srv["transport"] = cfg.server.transport
+    srv["host"] = cfg.server.host
+    srv["port"] = cfg.server.port
+    srv["mcp_path"] = cfg.server.mcp_path
+    doc["server"] = srv
+
+    # [web] — only enabled; admin_token stays env-managed, don't write it
+    web = tomlkit.table()
+    web["enabled"] = cfg.web.enabled
+    doc["web"] = web
+
+    # [prompt]
+    prm = tomlkit.table()
+    prm["base_vision_prompt"] = cfg.prompt.base_vision_prompt
+    doc["prompt"] = prm
+
+    # [request]
+    req = tomlkit.table()
+    req["timeout_ms"] = cfg.request.timeout_ms
+    req["max_retries"] = cfg.request.max_retries
+    req["backoff_base_ms"] = cfg.request.backoff_base_ms
+    doc["request"] = req
+
+    # [security]
+    sec = tomlkit.table()
+    sec["max_image_bytes"] = cfg.security.max_image_bytes
+    sec["allow_local_file"] = cfg.security.allow_local_file
+    sec["ssrf_block_private"] = cfg.security.ssrf_block_private
+    doc["security"] = sec
+
+    # default_provider (top-level key)
+    doc["default_provider"] = cfg.default_provider
+
+    # [[providers]] — replace the whole array
+    provs_arr = tomlkit.aot()
+    for p in cfg.providers:
+        t = tomlkit.table()
+        t["name"] = p.name
+        t["type"] = p.type
+        t["base_url"] = p.base_url
+        t["api_key"] = p.api_key
+        t["model"] = p.model
+        t["auth_header"] = p.auth_header
+        if p.auth_template:
+            t["auth_template"] = p.auth_template
+        t["api_path"] = p.api_path
+        t["max_tokens"] = p.max_tokens
+        provs_arr.append(t)
+    doc["providers"] = provs_arr
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        f.write(tomlkit.dumps(doc))
+    return path

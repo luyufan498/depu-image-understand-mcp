@@ -6,22 +6,22 @@
 <title>depu-img-mcp admin</title>
 <style>
   :root { --fg:#1f2328; --muted:#656d76; --bg:#fff; --card:#f6f8fa; --bd:#d0d7de;
-          --accent:#0969da; --ok:#1a7f37; --err:#cf222e; --dark-bg:#0d1117; --dark-fg:#e6edf3; }
+          --accent:#0969da; --ok:#1a7f37; --err:#cf222e; --warn:#9a6700; }
   @media (prefers-color-scheme: dark) {
     :root { --fg:#e6edf3; --muted:#8b949e; --bg:#0d1117; --card:#161b22; --bd:#30363d;
-            --accent:#58a6ff; --ok:#3fb950; --err:#f85149; }
+            --accent:#58a6ff; --ok:#3fb950; --err:#f85149; --warn:#d29922; }
   }
   * { box-sizing: border-box; }
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
          background:var(--bg); color:var(--fg); line-height:1.5; }
-  header { padding:16px 24px; border-bottom:1px solid var(--bd); }
-  header h1 { margin:0; font-size:18px; }
-  header span { color:var(--muted); font-size:13px; }
+  header { padding:16px 24px; border-bottom:1px solid var(--bd); overflow:hidden; }
+  header h1 { margin:0; font-size:18px; display:inline; }
+  header span { color:var(--muted); font-size:13px; margin-left:8px; }
   main { max-width:920px; margin:0 auto; padding:24px 16px 64px; }
   h2 { font-size:15px; margin:28px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--bd); }
   .card { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:16px; margin-bottom:16px; }
   .row { display:flex; gap:12px; flex-wrap:wrap; }
-  .row > div { flex:1; min-width:180px; }
+  .row > div { flex:1; min-width:160px; }
   label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
   input, select, textarea, button {
     font:inherit; padding:7px 10px; border:1px solid var(--bd); border-radius:6px;
@@ -29,35 +29,76 @@
   textarea { min-height:90px; resize:vertical; font-family:ui-monospace,SFMono-Regular,monospace; font-size:13px; }
   button { cursor:pointer; background:var(--accent); color:#fff; border:none; width:auto; padding:8px 18px; }
   button:disabled { opacity:.5; cursor:default; }
-  .prov { border-left:3px solid var(--accent); padding-left:12px; margin-bottom:10px; }
+  button.secondary { background:var(--card); color:var(--fg); border:1px solid var(--bd); }
+  button.danger { background:transparent; color:var(--err); border:1px solid var(--err); }
+  button.small { padding:4px 10px; font-size:13px; }
+  .prov { border-left:3px solid var(--accent); padding:12px 0 12px 14px; margin-bottom:14px; position:relative; }
+  .prov .del { position:absolute; top:8px; right:0; }
   .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px;
           background:var(--card); border:1px solid var(--bd); color:var(--muted); }
   .pill.ok { color:var(--ok); border-color:var(--ok); }
   #out { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,monospace;
          font-size:13px; min-height:60px; }
-  .err { color:var(--err); }
+  .err { color:var(--err); } .ok-msg { color:var(--ok); } .warn { color:var(--warn); }
   .drop { border:2px dashed var(--bd); border-radius:8px; padding:20px; text-align:center;
           color:var(--muted); cursor:pointer; }
   .drop.over { border-color:var(--accent); color:var(--accent); }
   #preview { max-width:240px; max-height:180px; margin-top:8px; border-radius:6px; }
   details summary { cursor:pointer; color:var(--muted); font-size:13px; }
   pre { background:var(--card); padding:12px; border-radius:6px; overflow:auto; font-size:12px; }
+  .sticky-bar { position:sticky; top:0; background:var(--bg); padding:10px 0; z-index:5;
+                border-bottom:1px solid var(--bd); margin:-8px 0 8px; display:flex; gap:10px; }
+  #status { flex:1; font-size:13px; align-self:center; }
 </style>
 </head>
 <body>
 <header>
   <h1>depu-img-mcp <span class="pill">admin</span></h1>
   <span>图像理解 MCP 服务器 · 配置与测试</span>
-  <button id="logoutBtn" style="float:right;width:auto;padding:4px 14px;font-size:13px">退出登录</button>
+  <button id="logoutBtn" class="secondary small" style="float:right;width:auto">退出登录</button>
 </header>
 <main>
 
+  <div class="sticky-bar">
+    <span id="status"></span>
+    <button id="saveBtn">保存配置并生效</button>
+    <button id="resetBtn" class="secondary">重置</button>
+  </div>
+
   <h2>后端 Provider</h2>
-  <div id="providers" class="card">加载中…</div>
+  <div class="card">
+    <div class="row" style="margin-bottom:12px">
+      <div>
+        <label>默认 Provider（image_understand 不指定时用它）</label>
+        <select id="defaultProvSelect"></select>
+      </div>
+    </div>
+    <div id="providers"></div>
+    <button id="addProvBtn" class="secondary small" style="margin-top:8px">+ 添加 provider</button>
+  </div>
 
   <h2>底层 Prompt</h2>
   <div class="card">
-    <pre id="basePrompt">{{ config.prompt.base_vision_prompt }}</pre>
+    <label>base_vision_prompt（每次调用注入的系统提示词，设空则禁用）</label>
+    <textarea id="basePromptInput"></textarea>
+  </div>
+
+  <h2>请求参数</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>超时 (ms)</label><input type="number" id="timeoutMs"></div>
+      <div><label>最大重试次数</label><input type="number" id="maxRetries"></div>
+      <div><label>退避基数 (ms)</label><input type="number" id="backoffBaseMs"></div>
+    </div>
+  </div>
+
+  <h2>安全参数</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>最大图片字节数</label><input type="number" id="maxImageBytes"></div>
+      <div><label>允许本地文件</label><select id="allowLocalFile"><option value="true">是</option><option value="false">否</option></select></div>
+      <div><label>SSRF 防护（屏蔽私网）</label><select id="ssrfBlock"><option value="true">是</option><option value="false">否</option></select></div>
+    </div>
   </div>
 
   <h2>测试场 (Playground)</h2>
@@ -97,36 +138,168 @@
   <h2>结果</h2>
   <div class="card"><div id="out">（等待运行）</div></div>
 
-  <details style="margin-top:24px">
-    <summary>原始配置 (JSON)</summary>
-    <pre id="rawConfig">加载中…</pre>
-  </details>
-
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
 let imageSource = "";
+let currentConfig = null;
 
+// ---------- config load / render ----------
 async function loadConfig(){
   const r = await fetch("api/config");
-  const c = await r.json();
-  // providers
+  currentConfig = await r.json();
+  renderProviders(currentConfig);
+  renderParams(currentConfig);
+  $("basePromptInput").value = currentConfig.prompt.base_vision_prompt || "";
+  setStatus("", "");
+}
+
+function renderProviders(c){
   const provs = c.providers || [];
-  $("providers").innerHTML = provs.length ? provs.map(p => `
-    <div class="prov">
-      <b>${p.name}</b> ${p.available ? '<span class="pill ok">可用</span>' : '<span class="pill">缺 key</span>'}<br>
-      <span style="color:var(--muted);font-size:13px">${p.type} · ${p.model}<br>${p.base_url}</span>
-    </div>`).join("") : '<span class="err">未配置任何 provider，请编辑 config.toml</span>';
+  // default provider dropdown
+  const def = $("defaultProvSelect");
+  def.innerHTML = provs.map(p => `<option value="${p.name}">${p.name}</option>`).join("");
+  def.value = c.default_provider;
+
+  // editable provider cards
+  const box = $("providers");
+  box.innerHTML = provs.map((p, i) => provCard(p, i)).join("") ||
+    '<span class="err">未配置任何 provider，点击下方添加</span>';
+
+  // playground provider dropdown
   const sel = $("provSelect");
   sel.innerHTML = provs.map(p => `<option value="${p.name}">${p.name} (${p.model})</option>`).join("");
   if (c.default_provider) sel.value = c.default_provider;
-  $("basePrompt").textContent = c.prompt.base_vision_prompt || "(空)";
-  $("rawConfig").textContent = JSON.stringify(c, null, 2);
 }
-loadConfig();
 
-// file picker
+function provCard(p, i){
+  const keyVal = p.api_key_set ? p.api_key : "";
+  const keyPh = p.api_key_set ? "已设置（保留则不修改）" : "填写 API key";
+  return `
+  <div class="prov" data-i="${i}">
+    <button class="danger small del" onclick="delProv(${i})">删除</button>
+    <div class="row">
+      <div><label>名称 (name)</label><input data-f="name" value="${esc(p.name)}"></div>
+      <div><label>类型 (type)</label>
+        <select data-f="type">
+          <option value="openai-compat" ${p.type==='openai-compat'?'selected':''}>openai-compat</option>
+          <option value="anthropic" ${p.type==='anthropic'?'selected':''}>anthropic</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:2"><label>Base URL</label><input data-f="base_url" value="${esc(p.base_url)}"></div>
+      <div><label>模型 (model)</label><input data-f="model" value="${esc(p.model)}"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:2"><label>API Key</label><input data-f="api_key" value="${esc(keyVal)}" placeholder="${keyPh}"></div>
+      <div><label>鉴权头 (auth_header)</label>
+        <select data-f="auth_header">
+          <option value="bearer" ${p.auth_header==='bearer'?'selected':''}>bearer</option>
+          <option value="x-api-key" ${p.auth_header==='x-api-key'?'selected':''}>x-api-key</option>
+          <option value="custom" ${p.auth_header==='custom'?'selected':''}>custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:2"><label>API Path</label><input data-f="api_path" value="${esc(p.api_path||'/chat/completions')}"></div>
+      <div><label>max_tokens</label><input type="number" data-f="max_tokens" value="${p.max_tokens||2048}"></div>
+    </div>
+  </div>`;
+}
+
+function renderParams(c){
+  $("timeoutMs").value = c.request.timeout_ms;
+  $("maxRetries").value = c.request.max_retries;
+  $("backoffBaseMs").value = c.request.backoff_base_ms;
+  $("maxImageBytes").value = c.security.max_image_bytes;
+  $("allowLocalFile").value = String(c.security.allow_local_file);
+  $("ssrfBlock").value = String(c.security.ssrf_block_private);
+}
+
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+
+// ---------- config collect / save ----------
+function collectConfig(){
+  const cards = [...document.querySelectorAll("#providers .prov")];
+  const providers = cards.map(card => {
+    const f = name => card.querySelector(`[data-f="${name}"]`).value;
+    return {
+      name: f("name"), type: f("type"), base_url: f("base_url"),
+      api_key: f("api_key"), model: f("model"),
+      auth_header: f("auth_header"), auth_template: "",
+      api_path: f("api_path"), max_tokens: parseInt(f("max_tokens"))||2048,
+    };
+  });
+  return {
+    default_provider: $("defaultProvSelect").value,
+    providers,
+    prompt: { base_vision_prompt: $("basePromptInput").value },
+    request: {
+      timeout_ms: parseInt($("timeoutMs").value)||30000,
+      max_retries: parseInt($("maxRetries").value)||3,
+      backoff_base_ms: parseInt($("backoffBaseMs").value)||500,
+    },
+    security: {
+      max_image_bytes: parseInt($("maxImageBytes").value)||20000000,
+      allow_local_file: $("allowLocalFile").value==="true",
+      ssrf_block_private: $("ssrfBlock").value==="true",
+    },
+  };
+}
+
+async function saveConfig(){
+  const body = collectConfig();
+  if (!body.providers.length){ setStatus("至少需要一个 provider", "err"); return; }
+  if (body.providers.some(p => !p.name || !p.base_url || !p.model)){
+    setStatus("每个 provider 需要 name / base_url / model", "err"); return;
+  }
+  $("saveBtn").disabled = true; setStatus("保存中…", "");
+  try {
+    const r = await fetch("api/config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.error){ setStatus(d.error, "err"); }
+    else if (d.warning){ setStatus("已生效（但 "+d.warning+"）", "warn"); await loadConfig(); }
+    else { setStatus("已保存并生效 ✓", "ok-msg"); await loadConfig(); }
+  } catch(e){ setStatus("保存失败: "+e, "err"); }
+  finally { $("saveBtn").disabled = false; }
+}
+
+function setStatus(msg, cls){
+  const el = $("status");
+  el.textContent = msg; el.className = cls;
+}
+
+// ---------- provider add / delete ----------
+window.delProv = function(i){
+  const cards = [...document.querySelectorAll("#providers .prov")];
+  if (cards.length <= 1){ setStatus("至少保留一个 provider", "err"); return; }
+  cards[i].remove();
+  // reindex
+  [...document.querySelectorAll("#providers .prov")].forEach((c, ni) => {
+    c.dataset.i = ni;
+    c.querySelector(".del").setAttribute("onclick", `delProv(${ni})`);
+  });
+};
+
+$("addProvBtn").addEventListener("click", () => {
+  const provs = currentConfig.providers || [];
+  provs.push({ name:"new-provider", type:"openai-compat", base_url:"https://api.openai.com/v1",
+    api_key:"", api_key_set:false, model:"gpt-4o", auth_header:"bearer",
+    auth_template:"", api_path:"/chat/completions", max_tokens:2048, available:false });
+  // render with the in-memory list (not yet saved)
+  currentConfig.providers = provs;
+  renderProviders(currentConfig);
+});
+
+$("saveBtn").addEventListener("click", saveConfig);
+$("resetBtn").addEventListener("click", loadConfig);
+
+// ---------- file / playground ----------
 $("drop").addEventListener("click", () => $("fileInput").click());
 $("fileInput").addEventListener("change", e => handleFile(e.target.files[0]));
 $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
@@ -143,9 +316,7 @@ function handleFile(f){
 }
 
 $("runBtn").addEventListener("click", async () => {
-  const src = imageSource || $("drop").textContent.trim();
   if (!imageSource) {
-    // allow URL/path pasted into the drop zone text
     const t = prompt("粘贴图片 URL / data-URI / 本地路径：");
     if (!t) return;
     imageSource = t;
@@ -155,16 +326,14 @@ $("runBtn").addEventListener("click", async () => {
     const r = await fetch("api/test", {
       method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        image: imageSource,
-        prompt: $("prompt").value,
-        task_type: $("taskType").value,
-        provider: $("provSelect").value,
+        image: imageSource, prompt: $("prompt").value,
+        task_type: $("taskType").value, provider: $("provSelect").value,
       })
     });
     const d = await r.json();
     $("out").innerHTML = d.error
       ? `<span class="err">错误：${d.error}</span>`
-      : d.result.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      : esc(d.result);
   } catch(e) { $("out").innerHTML = `<span class="err">请求失败：${e}</span>`; }
   finally { $("runBtn").disabled = false; }
 });
@@ -173,6 +342,8 @@ $("logoutBtn").addEventListener("click", async () => {
   await fetch("logout", { method: "POST" });
   location.href = "./";
 });
+
+loadConfig();
 </script>
 </body>
 </html>

@@ -19,7 +19,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from ..config import AppConfig
+from ..config import AppConfig, ProviderConfig, save_config
+from ..providers import ProviderRegistry
 
 _BASE = Path(__file__).parent
 TEMPLATES = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -37,7 +38,7 @@ def _check_auth(cfg: AppConfig, request: Request) -> bool:
     return bool(tok) and tok in _SESSIONS
 
 
-def build_admin_app(cfg: AppConfig) -> FastAPI:
+def build_admin_app(cfg: AppConfig, registry: ProviderRegistry) -> FastAPI:
     app = FastAPI(title="depu-img-mcp admin", docs_url=None, redoc_url=None)
 
     @app.get("/", response_class=HTMLResponse)
@@ -88,11 +89,13 @@ def build_admin_app(cfg: AppConfig) -> FastAPI:
 
     @app.get("/api/config")
     async def api_config(request: Request):
-        # Don't leak full api keys — mask them.
+        # Don't leak full api keys — mask them, but expose api_key_set so the
+        # frontend knows whether a key exists without seeing it.
         provs = []
         for p in cfg.providers:
             d = p.model_dump()
             has_key = bool(d.get("api_key"))
+            d["api_key_set"] = has_key
             if has_key:
                 k = d["api_key"]
                 d["api_key"] = k[:6] + "…" + k[-4:] if len(k) > 12 else "***"
@@ -102,9 +105,68 @@ def build_admin_app(cfg: AppConfig) -> FastAPI:
             "server": cfg.server.model_dump(),
             "web": cfg.web.model_dump(),
             "prompt": cfg.prompt.model_dump(),
+            "request": cfg.request.model_dump(),
+            "security": cfg.security.model_dump(),
             "default_provider": cfg.default_provider,
             "providers": provs,
         }
+
+    @app.post("/api/config")
+    async def api_config_save(request: Request):
+        """Save full config: update cfg in place, hot-reload registry, write TOML."""
+        body = await request.json()
+
+        # Build new provider configs, preserving unchanged keys (masked ones).
+        old_keys = {p.name: p.api_key for p in cfg.providers}
+        new_providers: list[ProviderConfig] = []
+        for rp in body.get("providers", []):
+            key = rp.get("api_key", "")
+            # If the key is masked (contains …) or empty but a key was set,
+            # keep the original key rather than overwriting with the mask.
+            if ("…" in key or key == "") and rp["name"] in old_keys and old_keys[rp["name"]]:
+                key = old_keys[rp["name"]]
+            try:
+                new_providers.append(ProviderConfig(
+                    name=rp["name"],
+                    type=rp.get("type", "openai-compat"),
+                    base_url=rp["base_url"],
+                    api_key=key,
+                    model=rp["model"],
+                    auth_header=rp.get("auth_header", "bearer"),
+                    auth_template=rp.get("auth_template", ""),
+                    api_path=rp.get("api_path", "/chat/completions"),
+                    max_tokens=int(rp.get("max_tokens", 2048)),
+                ))
+            except Exception as e:  # noqa: BLE001 - surface provider validation errors
+                return JSONResponse(
+                    {"error": f"provider '{rp.get('name','?')}': {e}"},
+                    status_code=400,
+                )
+
+        # Update cfg in place
+        cfg.providers = new_providers
+        cfg.default_provider = body.get("default_provider", cfg.default_provider)
+        if "prompt" in body:
+            cfg.prompt.base_vision_prompt = body["prompt"].get("base_vision_prompt", cfg.prompt.base_vision_prompt)
+        if "request" in body:
+            cfg.request.timeout_ms = int(body["request"].get("timeout_ms", cfg.request.timeout_ms))
+            cfg.request.max_retries = int(body["request"].get("max_retries", cfg.request.max_retries))
+            cfg.request.backoff_base_ms = int(body["request"].get("backoff_base_ms", cfg.request.backoff_base_ms))
+        if "security" in body:
+            cfg.security.max_image_bytes = int(body["security"].get("max_image_bytes", cfg.security.max_image_bytes))
+            cfg.security.allow_local_file = bool(body["security"].get("allow_local_file", cfg.security.allow_local_file))
+            cfg.security.ssrf_block_private = bool(body["security"].get("ssrf_block_private", cfg.security.ssrf_block_private))
+
+        # Hot-reload registry + persist
+        registry.reload(cfg)
+        try:
+            save_config(cfg)
+        except Exception as e:  # noqa: BLE001 - don't fail the whole save on write error
+            return JSONResponse(
+                {"ok": True, "warning": f"已生效但写回文件失败: {e}"},
+                status_code=200,
+            )
+        return {"ok": True}
 
     @app.post("/api/test")
     async def api_test(request: Request):
@@ -119,9 +181,7 @@ def build_admin_app(cfg: AppConfig) -> FastAPI:
 
         from ..image import ImageError, load_image
         from ..prompts import build_prompts
-        from ..providers import ProviderRegistry
 
-        registry = ProviderRegistry(cfg)
         try:
             img = await load_image(image, cfg.security)
             prov = registry.get(provider)
