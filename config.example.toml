@@ -27,13 +27,15 @@ ssrf_block_private = true
 
 # --- Vision backends. Define as many [[providers]] as you need. ---
 
-# Default: your LiteLLM gateway fronting vLLM.
+# Example: OpenAI-compatible endpoint (LiteLLM gateway / vLLM / OpenAI / etc.)
+# Replace base_url, api_key, and model with your own. api_key supports ${ENV}
+# interpolation so the real key stays in .env, not in this file.
 [[providers]]
 name = "default"
 type = "openai-compat"           # openai-compat | anthropic
-base_url = "https://gateway.ai.depu.school/v1"
-api_key = "${DEPU_GATEWAY_API_KEY}"
-model = "Kimi-K2.7-Code"
+base_url = "https://api.example.com/v1"
+api_key = "${VISION_API_KEY}"
+model = "your-vision-model"
 auth_header = "bearer"           # bearer | x-api-key | custom
 api_path = "/chat/completions"
 max_tokens = 2048
