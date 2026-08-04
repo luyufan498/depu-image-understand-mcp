@@ -33,10 +33,9 @@ class WebConfig(BaseModel):
 
 class PromptConfig(BaseModel):
     base_vision_prompt: str = (
-        "You are a vision assistant. Describe/analyze the image accurately and "
-        "concisely to help a text-only model that cannot see. If the user prompt "
-        "is empty, give a thorough general description. Respond in the same "
-        "language as the user's prompt."
+        "你是一个视觉助手。请准确、简洁地描述/分析图片，以帮助一个无法看到图片的纯文本模型。"
+        "如果用户的提示为空，请给出详尽的通用描述（物体、文字/OCR、布局、颜色等）。"
+        "请使用与用户提示相同的语言回答。"
     )
 
 

@@ -13,12 +13,10 @@ from .config import PromptConfig
 # the model understands the requested *kind* of analysis.
 TASK_TEMPLATES: dict[str, str] = {
     "general": "",
-    "ocr": "Extract all visible text from the image. Preserve layout where possible.",
-    "ui": "Describe the UI: layout, components, visible labels, and apparent purpose.",
-    "debug": "This is a screenshot of an error or debug screen. Describe the error, "
-             "stack trace, logs, or any diagnostic text in detail.",
-    "describe": "Give a thorough general description: objects, people, text/OCR, "
-                "layout, colors, and notable details.",
+    "ocr": "提取图片中所有可见的文字，尽量保留原始排版。",
+    "ui": "描述这个界面：布局、组件、可见的标签文字，以及它可能的用途。",
+    "debug": "这是一张报错或调试截图，请详细描述其中的错误信息、堆栈、日志或任何诊断文本。",
+    "describe": "请对图片给出详尽的通用描述：物体、人物、文字/OCR、布局、颜色及值得注意的细节。",
     "auto": "",  # let the user prompt (or describe default) drive
 }
 
@@ -41,7 +39,7 @@ def build_prompts(
 
     system = prompt_cfg.base_vision_prompt
     if task_template and system:
-        system = f"{system}\n\nTask guidance: {task_template}"
+        system = f"{system}\n\n任务指引：{task_template}"
     elif task_template:
         system = task_template
 
@@ -50,6 +48,6 @@ def build_prompts(
     elif task_template:
         final_user = task_template
     else:
-        final_user = ""  # provider will fall back to "Describe this image."
+        final_user = ""  # provider will fall back to a describe prompt
 
     return system, final_user

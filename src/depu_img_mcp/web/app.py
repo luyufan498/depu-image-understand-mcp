@@ -92,9 +92,11 @@ def build_admin_app(cfg: AppConfig) -> FastAPI:
         provs = []
         for p in cfg.providers:
             d = p.model_dump()
-            if d.get("api_key"):
+            has_key = bool(d.get("api_key"))
+            if has_key:
                 k = d["api_key"]
                 d["api_key"] = k[:6] + "…" + k[-4:] if len(k) > 12 else "***"
+            d["available"] = has_key
             provs.append(d)
         return {
             "server": cfg.server.model_dump(),

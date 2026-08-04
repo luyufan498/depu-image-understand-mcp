@@ -76,7 +76,7 @@ class OpenAICompatProvider(BaseProvider):
         user_content.append({"type": "image_url", "image_url": {"url": data_url}})
         # If no user text, still send a minimal text so the model knows the task.
         if not user_prompt:
-            user_content.insert(0, {"type": "text", "text": "Describe this image."})
+            user_content.insert(0, {"type": "text", "text": "请描述这张图片。"})
         messages.append({"role": "user", "content": user_content})
 
         payload = {
