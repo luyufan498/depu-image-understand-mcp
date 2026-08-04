@@ -10,7 +10,6 @@ supported). When running over HTTP, a lightweight web admin can be mounted at
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 
@@ -43,7 +42,8 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
         instructions=(
             "Image understanding proxy. Use `image_understand` to analyze any "
             "image via a vision model when you cannot see images directly. "
-            "Use `list_vision_providers` to see configured backends."
+            "The vision backend and model are chosen by the server admin and "
+            "cannot be overridden by the caller."
         ),
     )
 
@@ -52,13 +52,12 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
         image: str,
         prompt: str = "",
         task_type: str = "auto",
-        provider: str | None = None,
-        model: str | None = None,
-        max_tokens: int | None = None,
     ) -> str:
         """Describe or analyze an image using a vision model.
 
         Call this whenever you need to understand an image you cannot see.
+        The backend provider and model are determined by the server admin
+        configuration and cannot be overridden from the client.
 
         Args:
             image: The image as an http(s) URL, or a data:image/...;base64,...
@@ -69,9 +68,6 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
                 description guided by task_type.
             task_type: auto | general | ocr | ui | debug | describe. Hints the
                 kind of analysis when prompt is empty or terse.
-            provider: Name of a configured backend. None = default provider.
-            model: Override the provider's default model.
-            max_tokens: Override the provider's default max output tokens.
 
         Returns:
             The vision model's text description of the image.
@@ -85,7 +81,7 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
             return f"Error loading image: {e}"
 
         try:
-            prov = registry.get(provider)
+            prov = registry.get()
         except KeyError as e:
             return f"Error: {e}"
 
@@ -97,8 +93,6 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
                 mime_type=img.mime_type,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=model,
-                max_tokens=max_tokens,
                 timeout_ms=cfg.request.timeout_ms,
                 max_retries=cfg.request.max_retries,
                 backoff_base_ms=cfg.request.backoff_base_ms,
@@ -108,18 +102,6 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
             return f"Error from vision backend: {e}"
 
         return result
-
-    @mcp.tool()
-    async def list_vision_providers() -> str:
-        """List configured vision backends and their models.
-
-        Returns a JSON string of provider names, models, and availability.
-        """
-        return json.dumps(
-            {"default": registry.default_name, "providers": registry.list_providers()},
-            ensure_ascii=False,
-            indent=2,
-        )
 
     return mcp, registry
 

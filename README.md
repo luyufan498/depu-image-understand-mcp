@@ -44,14 +44,12 @@ image_understand(
     image: str,            # http(s) URL 或 data:image/...;base64,... URI（内联 base64）。不支持本地文件路径（Docker 部署，容器看不到客户端文件系统）
     prompt: str = "",      # 用户问题；空则按 task_type 给通用描述
     task_type: str = "auto",  # auto|general|ocr|ui|debug|describe
-    provider: str | None = None,  # 指定后端；None 用默认
-    model: str | None = None,
-    max_tokens: int | None = None,
 ) -> str
 ```
 
-### `list_vision_providers`
-返回 JSON：各后端名称、模型、是否可用。
+> **provider / model 由后台 admin 统一配置**，客户端不能指定。这用于企业内网服务，后端路由由运维通过 `/admin` 后台决定。
+
+只有一个工具。客户端传图 + prompt，服务器用后台配置的默认 provider 及其 model 进行视觉理解，返回文本描述。
 
 ## 配置示例
 
