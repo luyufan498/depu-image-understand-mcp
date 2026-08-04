@@ -61,8 +61,10 @@ def create_mcp_server(cfg: AppConfig) -> tuple[MCPServer, ProviderRegistry]:
         Call this whenever you need to understand an image you cannot see.
 
         Args:
-            image: The image as a local file path, an http(s) URL, a
-                data:image/...;base64,... URI, or a raw base64 string.
+            image: The image as an http(s) URL, or a data:image/...;base64,...
+                URI (inline base64). Local file paths are NOT supported because
+                the server runs in a container and cannot see the client
+                filesystem — encode the file as a base64 data URI first.
             prompt: What you want to know about the image. Empty = general
                 description guided by task_type.
             task_type: auto | general | ocr | ui | debug | describe. Hints the

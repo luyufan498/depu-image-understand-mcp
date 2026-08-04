@@ -41,7 +41,7 @@ MCP_TRANSPORT=stdio uv run python -m depu_img_mcp   # stdio 模式给 Claude Des
 ### `image_understand`
 ```python
 image_understand(
-    image: str,            # 本地路径 / http(s) URL / data:image/...;base64,... / 原始 base64
+    image: str,            # http(s) URL 或 data:image/...;base64,... URI（内联 base64）。不支持本地文件路径（Docker 部署，容器看不到客户端文件系统）
     prompt: str = "",      # 用户问题；空则按 task_type 给通用描述
     task_type: str = "auto",  # auto|general|ocr|ui|debug|describe
     provider: str | None = None,  # 指定后端；None 用默认

@@ -124,10 +124,12 @@ async def load_image(source: str, sec: SecurityConfig) -> ImageData:
     """Normalize any input to validated (base64, mime_type).
 
     Accepts:
-      - local file path
       - http(s) URL
-      - data:image/...;base64,... URI
+      - data:image/...;base64,... URI (inline base64)
       - raw base64 string (we try to detect mime from decoded bytes)
+
+    Local file paths are NOT accepted — the server runs in a container and
+    cannot reach the client filesystem. Callers must inline images as base64.
     """
     raw: bytes
     if source.startswith("data:"):
