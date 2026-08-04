@@ -15,72 +15,47 @@
 
 镜像：`catmouse498/depu-img-mcp:latest`
 
-### 方式一：config.toml + .env 文件（推荐，适合多 provider 配置）
+> **首次启动无需预建配置文件**。把一个空目录挂到 `/app/conf`，容器首次启动会自动从内置模板生成 `config.toml`，之后可在 `/admin` 后台在线编辑，或直接改宿主机上的文件后重启。
+>
+> ⚠️ **务必挂载目录，不要挂载单个 `config.toml` 文件**。若宿主机上该文件还不存在，Docker 会把它当成目录创建，容器内 `/app/conf/config.toml` 变成空目录，服务启动即崩。挂载目录则没有这个问题。
+>
+> 🔒 **非 root 运行 + 文件属主匹配宿主机**。容器以非 root 用户 `depu`（默认 uid/gid 1000）运行，生成的配置和数据文件属主是这个 uid，宿主机上 uid 1000 的用户可直接编辑。若你的宿主机用户 uid 不是 1000，用 `PUID` / `PGID` 环境变量指定（见下方环境变量表）。
 
-**1. 准备配置文件**
+### 方式一：挂载目录 + .env（推荐）
 
 ```bash
-# config.toml —— 配置视觉后端
-cat > config.toml << 'EOF'
-[server]
-transport = "streamable-http"
-host = "0.0.0.0"
-port = 8080
-
-[web]
-enabled = true
-
-[prompt]
-base_vision_prompt = "你是一个视觉助手。请准确、简洁地描述图片，帮助无法看图的文本模型。"
-
-[request]
-timeout_ms = 30000
-max_retries = 3
-backoff_base_ms = 500
-
-[security]
-max_image_bytes = 20000000
-allow_local_file = true
-ssrf_block_private = true
-
-[[providers]]
-name = "default"
-type = "openai-compat"
-base_url = "https://your-vision-endpoint.com/v1"
-api_key = "${VISION_API_KEY}"
-model = "your-vision-model"
-auth_header = "bearer"
-api_path = "/chat/completions"
-max_tokens = 2048
-EOF
-
-# .env —— 填入真实密钥（不进镜像，不提交 git）
+# 1. 准备 .env（填密钥，不进镜像）
 cat > .env << 'EOF'
 VISION_API_KEY=sk-your-real-api-key
 ADMIN_TOKEN=your-admin-password
 EOF
-```
 
-**2. 启动**
-
-```bash
+# 2. 建一个空配置目录并启动（首次会自动生成 conf/config.toml）
+mkdir -p conf
 docker run -d \
   --name depu-img-mcp \
   -p 8080:8080 \
-  -v $(pwd)/config.toml:/app/config.toml \
+  -v $(pwd)/conf:/app/conf \
   --env-file .env \
   --restart unless-stopped \
   catmouse498/depu-img-mcp:latest
+
+# 3. 启动后编辑 conf/config.toml 指向你的视觉后端，或访问 /admin 在线改
+#    docker restart depu-img-mcp 让文件改动生效
 ```
 
-### 方式二：纯环境变量（适合单 provider、快速部署）
+如果想预先写好配置再启动，把 `config.example.toml` 复制进 `conf/config.toml` 改好即可，容器检测到文件已存在就不会覆盖。
 
-不用 config.toml，所有配置通过环境变量注入。镜像自带的 config.toml 用 `${ENV}` 引用，环境变量会自动填充。
+### 方式二：环境变量 + 目录挂载（适合单 provider、快速部署）
+
+挂载配置目录（首次自动生成 `config.toml`），密钥和传输参数走环境变量。镜像内置的默认 `config.toml` 用 `${ENV}` 引用，环境变量自动填充。
 
 ```bash
+mkdir -p conf
 docker run -d \
   --name depu-img-mcp \
   -p 8080:8080 \
+  -v $(pwd)/conf:/app/conf \
   -e VISION_API_KEY=sk-your-real-api-key \
   -e ADMIN_TOKEN=your-admin-password \
   -e MCP_TRANSPORT=streamable-http \
@@ -91,7 +66,7 @@ docker run -d \
   catmouse498/depu-img-mcp:latest
 ```
 
-> **注意**：纯 env 方式下，后端端点 URL 和 model 名仍需在 `config.toml` 里设置（因为它们不是预定义的环境变量）。如果你只用环境变量，需挂载一个改好 `base_url` 和 `model` 的 `config.toml`。最简单的做法还是用**方式一**。
+> **注意**：后端端点 `base_url` 和 `model` 名不是预定义的环境变量，仍需在 `conf/config.toml` 里设置。首次启动后容器会自动生成默认 `config.toml`，编辑其中的 `base_url` 和 `model` 后 `docker restart depu-img-mcp` 即可，或直接进 `/admin` 后台改。
 
 ### 方式三：docker-compose
 
@@ -111,11 +86,12 @@ services:
       - WEB_ENABLED=true
       - ADMIN_TOKEN=${ADMIN_TOKEN}
     volumes:
-      - ./config.toml:/app/config.toml
+      - ./conf:/app/conf
     restart: unless-stopped
 ```
 
 ```bash
+mkdir -p conf          # 首次可为空，容器会自动生成 config.toml
 docker compose up -d
 ```
 
@@ -132,6 +108,9 @@ docker compose up -d
 | `VISION_API_KEY` | 视觉后端 API key（被 config.toml 的 `${VISION_API_KEY}` 引用） | — |
 | `BASE_VISION_PROMPT` | 覆盖底层系统提示词 | 内置中文默认值 |
 | `DEFAULT_PROVIDER` | 默认后端名（覆盖 config.toml） | `default` |
+| `DEPU_CONFIG_PATH` | 配置文件路径（首次不存在时自动生成） | `/app/conf/config.toml` |
+| `DEPU_CONFIG_DIR` | 配置目录（entrypoint 用来定位/创建配置） | `/app/conf` |
+| `PUID` / `PGID` | 容器运行用户 uid/gid，决定生成文件的属主。设成你宿主机用户的 uid/gid，挂出来的文件就能直接编辑 | `1000` / `1000` |
 
 ## 访问
 

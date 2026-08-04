@@ -8,5 +8,6 @@ build/
 .ruff_cache/
 .pytest_cache/
 data/
+conf/
 config.toml
 !config.example.toml

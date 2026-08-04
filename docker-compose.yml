@@ -13,9 +13,16 @@ services:
       - MCP_PORT=8080
       - WEB_ENABLED=true
       - ADMIN_TOKEN=${ADMIN_TOKEN}
+      # Run as non-root; set to your host user's uid/gid so files in ./conf and
+      # ./data are owned by you (find yours with `id -u` / `id -g`). Default 1000.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
-      # Config is read/written by the admin UI — must be writable.
-      - ./config.toml:/app/config.toml
+      # Mount a directory, not a single file. On first start the host dir is
+      # empty; the entrypoint seeds config.toml from the bundled default.
+      # Mounting a single file breaks when it doesn't exist yet (Docker turns it
+      # into a directory and the server crashes on read).
+      - ./conf:/app/conf
       # Optional persistence (logs, cache).
       - ./data:/app/data
     restart: unless-stopped

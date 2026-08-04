@@ -106,8 +106,15 @@ def _apply_env_overrides(cfg: AppConfig) -> AppConfig:
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
-    """Load config from TOML file, then apply env overrides."""
+    """Load config from TOML file, then apply env overrides.
+
+    If the resolved config path does not exist, seed it from the bundled
+    default template (config.example.toml) so a fresh container/machine can boot
+    on first start instead of crashing on a missing file.
+    """
     path = Path(path) if path else _default_config_path()
+    if not path.exists():
+        _seed_default_config(path)
     cfg = AppConfig()
     if path.exists():
         with path.open("rb") as f:
@@ -133,17 +140,61 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     return _apply_env_overrides(cfg)
 
 
+def _seed_default_config(path: Path) -> None:
+    """Copy the bundled config.example.toml to `path` if available.
+
+    Called on first start when no config file exists yet. Falls back to writing
+    an empty-ish default if the template can't be located, so the server still
+    boots (env overrides fill in the rest).
+    """
+    import shutil
+
+    # Look for the bundled template next to the known locations.
+    candidates = [
+        Path.cwd() / "config.example.toml",            # local dev / project root
+        Path(__file__).resolve().parent.parent.parent / "config.example.toml",  # repo root
+        Path("/app/config.example.toml"),              # container runtime layout
+    ]
+    for c in candidates:
+        if c.is_file():
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(c, path)
+                return
+            except OSError:
+                break  # fall through to inline default
+    # Last resort: write a minimal default so load doesn't crash.
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            '# Auto-generated minimal config. Edit me or set env vars.\n'
+            'default_provider = "default"\n'
+            '[[providers]]\n'
+            'name = "default"\n'
+            'type = "openai-compat"\n'
+            'base_url = ""\n'
+            'api_key = ""\n'
+            'model = ""\n',
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # read-only fs; load_config will proceed with defaults
+
+
 def _default_config_path() -> Path:
     env_path = os.environ.get("DEPU_CONFIG_PATH", "")
+    if env_path:
+        return Path(env_path)
     candidates = [
-        Path(env_path) if env_path else None,
         Path.cwd() / "config.toml",
+        Path("/app/conf/config.toml"),   # container default (DEPU_CONFIG_PATH)
         Path.cwd() / "config.example.toml",
     ]
     for c in candidates:
-        if c and c.is_file():
+        if c.is_file():
             return c
-    return Path.cwd() / "config.toml"
+    # Nothing exists yet — return the path we'd want to seed into.
+    return Path("/app/conf/config.toml") if Path("/app").is_dir() else Path.cwd() / "config.toml"
 
 
 def save_config(cfg: AppConfig, path: str | Path | None = None) -> Path:

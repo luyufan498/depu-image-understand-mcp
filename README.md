@@ -15,18 +15,19 @@
 ## 快速开始
 
 ```bash
-# 1. 配置
-cp config.example.toml config.toml
+# 1. 准备 .env（至少填 ADMIN_TOKEN 和视觉后端 API key）
 cp .env.example .env
-# 编辑 .env 填入 API key，编辑 config.toml 指向你的视觉后端
+# 编辑 .env 填入 API key
 
-# 2. Docker 启动
+# 2. Docker 启动（首次会自动生成 ./conf/config.toml 默认配置）
 docker compose up -d
 
-# 3. 访问后台
+# 3. 访问后台改配置（或直接编辑 ./conf/config.toml 后重启）
 open http://localhost:8080/admin
 # MCP 端点：http://localhost:8080/mcp
 ```
+
+> 首次启动无需预先准备 `config.toml`：容器挂载 `./conf/` 目录，若里面没有配置文件，会自动从内置模板生成一份。之后可在 `/admin` 后台在线编辑，或直接改 `./conf/config.toml` 后 `docker compose restart`。
 
 ## 本地运行（开发）
 
