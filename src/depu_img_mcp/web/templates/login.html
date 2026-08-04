@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>depu-img-mcp admin · 登录</title>
+<style>
+  :root { --fg:#1f2328; --muted:#656d76; --bg:#fff; --card:#f6f8fa; --bd:#d0d7de;
+          --accent:#0969da; --err:#cf222e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6edf3; --muted:#8b949e; --bg:#0d1117; --card:#161b22; --bd:#30363d;
+            --accent:#58a6ff; --err:#f85149; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); display:flex; align-items:center;
+         justify-content:center; min-height:100vh; }
+  .box { background:var(--card); border:1px solid var(--bd); border-radius:10px;
+         padding:28px 28px 22px; width:320px; max-width:90vw; }
+  h1 { font-size:17px; margin:0 0 4px; }
+  p.sub { color:var(--muted); font-size:13px; margin:0 0 20px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+  input { font:inherit; padding:8px 10px; border:1px solid var(--bd); border-radius:6px;
+          background:var(--bg); color:var(--fg); width:100%; }
+  button { cursor:pointer; background:var(--accent); color:#fff; border:none;
+           width:100%; padding:9px; border-radius:6px; font:inherit; margin-top:14px; }
+  button:disabled { opacity:.5; }
+  .err { color:var(--err); font-size:13px; margin-top:10px; min-height:18px; }
+</style>
+</head>
+<body>
+<form class="box" id="loginForm">
+  <h1>depu-img-mcp 管理后台</h1>
+  <p class="sub">请输入管理密码</p>
+  <label>密码</label>
+  <input type="password" id="password" autofocus autocomplete="current-password">
+  <button type="submit" id="btn">登录</button>
+  <div class="err" id="msg"></div>
+</form>
+<script>
+const $ = id => document.getElementById(id);
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("btn").disabled = true; $("msg").textContent = "";
+  try {
+    const r = await fetch("login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ password: $("password").value })
+    });
+    if (r.ok) { location.href = "./"; }
+    else { const d = await r.json(); $("msg").textContent = d.error || "登录失败"; }
+  } catch (err) { $("msg").textContent = "请求失败: " + err; }
+  finally { $("btn").disabled = false; }
+});
+</script>
+</body>
+</html>

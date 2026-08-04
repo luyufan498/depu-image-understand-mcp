@@ -12,6 +12,7 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8080
       - WEB_ENABLED=true
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
     volumes:
       # Override config without rebuilding the image.
       - ./config.toml:/app/config.toml:ro

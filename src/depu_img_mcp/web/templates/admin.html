@@ -48,6 +48,7 @@
 <header>
   <h1>depu-img-mcp <span class="pill">admin</span></h1>
   <span>图像理解 MCP 服务器 · 配置与测试</span>
+  <button id="logoutBtn" style="float:right;width:auto;padding:4px 14px;font-size:13px">退出登录</button>
 </header>
 <main>
 
@@ -166,6 +167,11 @@ $("runBtn").addEventListener("click", async () => {
       : d.result.replace(/&/g,"&amp;").replace(/</g,"&lt;");
   } catch(e) { $("out").innerHTML = `<span class="err">请求失败：${e}</span>`; }
   finally { $("runBtn").disabled = false; }
+});
+
+$("logoutBtn").addEventListener("click", async () => {
+  await fetch("logout", { method: "POST" });
+  location.href = "./";
 });
 </script>
 </body>
