@@ -15,7 +15,7 @@ import hmac
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -89,17 +89,15 @@ def build_admin_app(cfg: AppConfig, registry: ProviderRegistry) -> FastAPI:
 
     @app.get("/api/config")
     async def api_config(request: Request):
-        # Don't leak full api keys — mask them, but expose api_key_set so the
-        # frontend knows whether a key exists without seeing it.
+        # Requires login — returns full api keys so the admin UI can show them
+        # via a password field + eye toggle (no per-refresh masking drift).
+        if not _check_auth(cfg, request):
+            raise HTTPException(status_code=401, detail="login required")
         provs = []
         for p in cfg.providers:
             d = p.model_dump()
-            has_key = bool(d.get("api_key"))
-            d["api_key_set"] = has_key
-            if has_key:
-                k = d["api_key"]
-                d["api_key"] = k[:6] + "…" + k[-4:] if len(k) > 12 else "***"
-            d["available"] = has_key
+            d["api_key_set"] = bool(d.get("api_key"))
+            d["available"] = bool(d.get("api_key"))
             provs.append(d)
         return {
             "server": cfg.server.model_dump(),
@@ -114,23 +112,19 @@ def build_admin_app(cfg: AppConfig, registry: ProviderRegistry) -> FastAPI:
     @app.post("/api/config")
     async def api_config_save(request: Request):
         """Save full config: update cfg in place, hot-reload registry, write TOML."""
+        if not _check_auth(cfg, request):
+            raise HTTPException(status_code=401, detail="login required")
         body = await request.json()
 
-        # Build new provider configs, preserving unchanged keys (masked ones).
-        old_keys = {p.name: p.api_key for p in cfg.providers}
+        # Build new provider configs.
         new_providers: list[ProviderConfig] = []
         for rp in body.get("providers", []):
-            key = rp.get("api_key", "")
-            # If the key is masked (contains …) or empty but a key was set,
-            # keep the original key rather than overwriting with the mask.
-            if ("…" in key or key == "") and rp["name"] in old_keys and old_keys[rp["name"]]:
-                key = old_keys[rp["name"]]
             try:
                 new_providers.append(ProviderConfig(
                     name=rp["name"],
                     type=rp.get("type", "openai-compat"),
                     base_url=rp["base_url"],
-                    api_key=key,
+                    api_key=rp.get("api_key", ""),
                     model=rp["model"],
                     auth_header=rp.get("auth_header", "bearer"),
                     auth_template=rp.get("auth_template", ""),

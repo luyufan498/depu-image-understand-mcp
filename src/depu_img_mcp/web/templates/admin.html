@@ -147,7 +147,8 @@ let currentConfig = null;
 
 // ---------- config load / render ----------
 async function loadConfig(){
-  const r = await fetch("api/config");
+  const r = await fetch("api/config", { credentials: "same-origin" });
+  if (r.status === 401) { location.href = "./"; return; }
   currentConfig = await r.json();
   renderProviders(currentConfig);
   renderParams(currentConfig);
@@ -167,6 +168,15 @@ function renderProviders(c){
   box.innerHTML = provs.map((p, i) => provCard(p, i)).join("") ||
     '<span class="err">未配置任何 provider，点击下方添加</span>';
 
+  // eye toggle for api_key fields
+  document.querySelectorAll("#providers .eye").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const inp = btn.previousElementSibling;
+      if (inp.type === "password") { inp.type = "text"; btn.textContent = "🙈"; }
+      else { inp.type = "password"; btn.textContent = "👁"; }
+    });
+  });
+
   // playground provider dropdown
   const sel = $("provSelect");
   sel.innerHTML = provs.map(p => `<option value="${p.name}">${p.name} (${p.model})</option>`).join("");
@@ -174,8 +184,8 @@ function renderProviders(c){
 }
 
 function provCard(p, i){
-  const keyVal = p.api_key_set ? p.api_key : "";
-  const keyPh = p.api_key_set ? "已设置（保留则不修改）" : "填写 API key";
+  const keyVal = p.api_key || "";
+  const keyPh = "填写 API key";
   return `
   <div class="prov" data-i="${i}">
     <button class="danger small del" onclick="delProv(${i})">删除</button>
@@ -193,7 +203,12 @@ function provCard(p, i){
       <div><label>模型 (model)</label><input data-f="model" value="${esc(p.model)}"></div>
     </div>
     <div class="row" style="margin-top:8px">
-      <div style="flex:2"><label>API Key</label><input data-f="api_key" value="${esc(keyVal)}" placeholder="${keyPh}"></div>
+      <div style="flex:2"><label>API Key</label>
+        <div style="display:flex;gap:0">
+          <input type="password" data-f="api_key" value="${esc(keyVal)}" placeholder="${keyPh}" style="flex:1">
+          <button type="button" class="secondary small eye" tabindex="-1" style="width:auto;padding:7px 10px;border-radius:0 6px 6px 0">👁</button>
+        </div>
+      </div>
       <div><label>鉴权头 (auth_header)</label>
         <select data-f="auth_header">
           <option value="bearer" ${p.auth_header==='bearer'?'selected':''}>bearer</option>
@@ -259,7 +274,7 @@ async function saveConfig(){
   try {
     const r = await fetch("api/config", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(body),
+      body: JSON.stringify(body), credentials: "same-origin",
     });
     const d = await r.json();
     if (d.error){ setStatus(d.error, "err"); }
